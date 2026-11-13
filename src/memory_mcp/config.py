@@ -17,6 +17,7 @@ class MemoryConfig:
     collection_name: str
     embedding_model: str = "intfloat/multilingual-e5-base"
     enable_bm25: bool = True
+    embed_server: str | None = None  # 埋め込みを頼むサーバー(memory-embed-server)。無ければ自分でモデルを読む
 
     @classmethod
     def from_env(cls) -> "MemoryConfig":
@@ -28,6 +29,7 @@ class MemoryConfig:
             collection_name=os.getenv("MEMORY_COLLECTION_NAME", "claude_memories"),
             embedding_model=os.getenv("MEMORY_EMBEDDING_MODEL", "intfloat/multilingual-e5-base"),
             enable_bm25=os.getenv("MEMORY_ENABLE_BM25", "true").lower() != "false",
+            embed_server=os.getenv("MEMORY_EMBED_SERVER") or None,
         )
 
 

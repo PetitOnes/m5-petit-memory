@@ -27,6 +27,7 @@ dev = [
 
 [project.scripts]
 memory-mcp = "memory_mcp.server:main"
+memory-embed-server = "memory_mcp.embed_server:main"
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/memory_mcp"]

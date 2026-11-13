@@ -49,6 +49,38 @@ uv run memory-mcp
 | `MEMORY_COLLECTION_NAME` | `claude_memories` | コレクション名(メタデータとして保存) |
 | `MEMORY_EMBEDDING_MODEL` | `intfloat/multilingual-e5-base` | 埋め込みに使うsentence-transformersモデル |
 | `MEMORY_ENABLE_BM25` | `true` | BM25ハイブリッド再ランキングを有効化(`false`で無効) |
+| `MEMORY_EMBED_SERVER` | (なし) | 埋め込みを頼むサーバーの URL(例 `http://127.0.0.1:18766`)。下の「埋め込みを 1 つのプロセスにまとめる」 |
+
+### 埋め込みを 1 つのプロセスにまとめる(任意)
+
+`memory-mcp` は、待っているだけなら約 70MB ですが、1 回でも覚える・思い出すをすると埋め込みのモデルを読み込んで約 1.4GB になり、最初の 1 回に 5 秒ほどかかります。何人ぶんも同時に動かす家では、その数だけ重なります。
+
+`memory-embed-server` を 1 つ立てておくと、モデルを読むのはそのプロセスだけになります(各 `memory-mcp` は 100MB 前後のまま、最初の 1 回も 0.1 秒ほど)。ベクトルは自分で読んだ場合と同じなので、記憶 DB はそのまま使えます。
+
+```bash
+# 1. サーバーを立てる(127.0.0.1:18766 で待つ。--port / MEMORY_EMBED_PORT で変えられる)
+uv run --directory /path/to/m5-petit-memory memory-embed-server
+
+# 2. 使う側(memory-mcp を起動する環境)に URL を渡す
+MEMORY_EMBED_SERVER=http://127.0.0.1:18766
+```
+
+- サーバーにつながらない・モデル名が違うときは、今までどおりそのプロセスがモデルを読んで続けます(記憶が使えなくなることはありません)
+- サーバーには記憶の文が流れます。127.0.0.1 だけで待ち、文はログに出しません。ほかの機械から届く形(`--host 0.0.0.0`)にはしないでください
+- 常駐させるときの systemd(ユーザー)の例:
+
+```ini
+# ~/.config/systemd/user/memory-embed-server.service
+[Unit]
+Description=memory-embed-server (shared embedding model for memory-mcp)
+
+[Service]
+ExecStart=%h/.local/bin/uv run --directory /path/to/m5-petit-memory memory-embed-server
+Restart=on-failure
+
+[Install]
+WantedBy=default.target
+```
 
 ## Claude Code連携
 

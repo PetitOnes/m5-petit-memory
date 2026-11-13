@@ -49,6 +49,25 @@ uv run memory-mcp
 | `MEMORY_COLLECTION_NAME` | `claude_memories` | Collection name, stored as metadata |
 | `MEMORY_EMBEDDING_MODEL` | `intfloat/multilingual-e5-base` | sentence-transformers model used for embeddings |
 | `MEMORY_ENABLE_BM25` | `true` | Enable BM25 hybrid re-ranking (`false` to disable) |
+| `MEMORY_EMBED_SERVER` | (unset) | URL of a shared embedding server (e.g. `http://127.0.0.1:18766`). See "Sharing one embedding process" below |
+
+### Sharing one embedding process (optional)
+
+An idle `memory-mcp` uses about 70 MB, but once it remembers or recalls anything it loads the embedding model and grows to about 1.4 GB, and the first call takes about 5 seconds. With several characters running at once, that multiplies.
+
+Run one `memory-embed-server` and only that process loads the model (each `memory-mcp` stays around 100 MB, and the first call takes about 0.1 s). Vectors are identical to the ones computed locally, so existing databases keep working.
+
+```bash
+# 1. Start the server (listens on 127.0.0.1:18766; change with --port / MEMORY_EMBED_PORT)
+uv run --directory /path/to/m5-petit-memory memory-embed-server
+
+# 2. Pass the URL to the environment that launches memory-mcp
+MEMORY_EMBED_SERVER=http://127.0.0.1:18766
+```
+
+- If the server is unreachable or serves a different model, the process loads the model itself as before (memory never becomes unavailable)
+- Memory text flows through the server. It listens on 127.0.0.1 only and does not log text. Do not expose it to other machines (`--host 0.0.0.0`)
+- The Japanese README has a systemd (user) unit example
 
 ## Claude Code integration
 

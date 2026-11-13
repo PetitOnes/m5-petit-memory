@@ -276,7 +276,7 @@ class MemoryStore:
         self._association_engine = AssociationEngine()
         self._consolidation_engine = ConsolidationEngine()
         self._hopfield = ModernHopfieldNetwork(beta=4.0, n_iters=3)
-        self._embedding_fn = E5EmbeddingFunction(config.embedding_model)
+        self._embedding_fn = E5EmbeddingFunction(config.embedding_model, server_url=config.embed_server)
         self._bm25_index = BM25Index()
 
     # ── Connection ──────────────────────────────
