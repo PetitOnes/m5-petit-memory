@@ -6,7 +6,13 @@ import pytest
 import pytest_asyncio
 
 from memory_mcp.config import SleepConfig
-from memory_mcp.sleep import SleepEngine, _is_first_experience, _is_protected, calculate_retention_score
+from memory_mcp.sleep import (
+    MERGED_PREFIX,
+    SleepEngine,
+    _is_first_experience,
+    _is_protected,
+    calculate_retention_score,
+)
 from memory_mcp.store import MemoryStore
 from memory_mcp.types import Memory
 
@@ -204,12 +210,64 @@ async def test_sleep_dry_run(store_with_old_memories: MemoryStore):
 async def test_sleep_forget(store_with_old_memories: MemoryStore):
     """importance=1, neutral, old, low access の記憶は忘却される."""
     store = store_with_old_memories
-    engine = SleepEngine(store)
+    engine = SleepEngine(store, SleepConfig(forget=True))
     stats = await engine.run(dry_run=False)
 
     # 「何もない日だった」は忘却されるはず
     forgotten_contents = [f["content"] for f in stats.forgotten]
     assert any("何もない日" in c for c in forgotten_contents)
+
+
+@pytest.mark.asyncio
+async def test_sleep_default_deletes_nothing(store_with_old_memories: MemoryStore):
+    """既定の整理(減衰だけ)では、記憶は 1 件も消えない."""
+    store = store_with_old_memories
+    before = {m.id for m in await store.get_all()}
+
+    stats = await SleepEngine(store).run(dry_run=False)
+
+    assert stats.merged == []
+    assert stats.forgotten == []
+    assert {m.id for m in await store.get_all()} == before
+
+
+async def _save_old(store: MemoryStore, content: str, days: int = 30) -> str:
+    mem = await store.save(content=content, emotion="neutral", importance=2, category="daily")
+    db = store._ensure_connected()
+    old = datetime.now() - timedelta(days=days)
+    db.execute("UPDATE memories SET timestamp = ? WHERE id = ?", (old.isoformat(), mem.id))
+    db.commit()
+    return mem.id
+
+
+@pytest.mark.asyncio
+async def test_sleep_merge_only_when_enabled(memory_store: MemoryStore):
+    """同じ文の古い記憶は、merge を立てたときだけ 1 件にまとまる."""
+    for _ in range(2):
+        await _save_old(memory_store, "朝の確認では、部屋は静かで、だれもいなかった")
+
+    stats = await SleepEngine(memory_store).run(dry_run=False)
+    assert stats.merged == []
+    assert len(await memory_store.get_all()) == 2
+
+    stats = await SleepEngine(memory_store, SleepConfig(merge=True)).run(dry_run=False)
+    assert len(stats.merged) == 1
+    remaining = await memory_store.get_all()
+    assert len(remaining) == 1
+    assert remaining[0].content.startswith(MERGED_PREFIX)
+
+
+@pytest.mark.asyncio
+async def test_sleep_does_not_merge_merged_memories(memory_store: MemoryStore):
+    """統合でできた記憶どうしは、古くなっても、もう一度まとめない(決まり文句が同じで必ず似てしまう)."""
+    head = f"{MERGED_PREFIX}: dailyの記録 2件（2026-01-01〜2026-01-02）。主な内容: "
+    await _save_old(memory_store, head + "朝の散歩をした")
+    await _save_old(memory_store, head + "朝の散歩をした")
+
+    stats = await SleepEngine(memory_store, SleepConfig(merge=True)).run(dry_run=False)
+
+    assert stats.merged == []
+    assert len(await memory_store.get_all()) == 2
 
 
 @pytest.mark.asyncio

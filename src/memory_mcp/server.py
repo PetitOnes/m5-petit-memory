@@ -609,7 +609,7 @@ class MemoryMCPServer:
                 ),
                 Tool(
                     name="sleep",
-                    description="Memory consolidation: compress similar old memories, decay low-retention ones, and forget unimportant ones. Use dry_run=true (default) to preview what would happen.",
+                    description="Memory consolidation: decay the importance of low-retention old memories. Merging similar memories and forgetting unimportant ones delete memories, so they run only with merge=true / forget=true. Use dry_run=true (default) to preview what would happen.",
                     inputSchema={
                         "type": "object",
                         "properties": {
@@ -624,7 +624,17 @@ class MemoryMCPServer:
                             },
                             "similarity_threshold": {
                                 "type": "number",
-                                "description": "Cosine similarity threshold for merging (default: 0.85)",
+                                "description": "Cosine similarity threshold for merging (default: 0.95)",
+                            },
+                            "merge": {
+                                "type": "boolean",
+                                "description": "If true, merge similar old memories into one and delete the originals (default: false)",
+                                "default": False,
+                            },
+                            "forget": {
+                                "type": "boolean",
+                                "description": "If true, delete old unimportant memories (default: false)",
+                                "default": False,
                             },
                         },
                     },
@@ -1309,6 +1319,9 @@ Date Range:
                             overrides["min_age_days"] = arguments["min_age_days"]
                         if "similarity_threshold" in arguments:
                             overrides["similarity_threshold"] = arguments["similarity_threshold"]
+                        for flag in ("merge", "forget"):
+                            if flag in arguments:
+                                overrides[flag] = bool(arguments[flag])
 
                         config = SleepConfig(**overrides) if overrides else SleepConfig()
                         engine = SleepEngine(self._memory_store, config)
