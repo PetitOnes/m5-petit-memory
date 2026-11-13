@@ -36,12 +36,26 @@ class SleepConfig:
     """Sleep (memory consolidation/forgetting) configuration."""
 
     min_age_days: int = 14  # 対象の最低経過日数
-    similarity_threshold: float = 0.85  # 圧縮時の類似度閾値
+    # 統合と忘却は記憶を消すので、既定では動かさない(既定の整理は減衰だけ)。
+    # multilingual-e5 の類似度は無関係な文どうしでも 0.85 前後になるので、
+    # 統合を使うときも、ほぼ同じ文だけがまとまるように基準を高くしておく
+    merge: bool = False  # 似た記憶を 1 件にまとめ、元を消す
+    forget: bool = False  # 重要度 1 の古い記憶を消す
+    similarity_threshold: float = 0.95  # 圧縮時の類似度閾値
     decay_retention_threshold: float = 0.4  # この保持スコア以下で減衰
     forget_min_age_days: int = 14  # 忘却の最低経過日数
     forget_max_access: int = 3  # 忘却対象の最大アクセス回数
     protected_importance: int = 4  # この値以上は絶対保護
     protected_emotions: tuple[str, ...] = ("happy", "moved", "excited", "surprised")
+
+    @classmethod
+    def from_env(cls) -> "SleepConfig":
+        """環境変数から。MEMORY_SLEEP_MERGE / MEMORY_SLEEP_FORGET が true のときだけ、消す処理を動かす."""
+
+        def on(name: str) -> bool:
+            return os.getenv(name, "false").lower() in ("1", "true", "yes")
+
+        return cls(merge=on("MEMORY_SLEEP_MERGE"), forget=on("MEMORY_SLEEP_FORGET"))
 
 
 @dataclass(frozen=True)

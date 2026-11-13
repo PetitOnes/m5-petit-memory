@@ -306,21 +306,25 @@ Inspect associative expansion diagnostics without committing activation updates.
 
 ### sleep
 
-Memory consolidation — compress similar old memories, decay low-retention ones, forget unimportant ones. Protected memories (high importance, strong emotions, first experiences, episode members) are never deleted.
+Memory consolidation — decay low-retention old memories (lowers importance only; nothing is deleted). Merging similar memories and forgetting unimportant ones **delete memories**, so they run only when `merge` / `forget` are set to `true`. Protected memories (high importance, strong emotions, first experiences, episode members) are never deleted.
+
+> **Why merge and forget are off by default**: cosine similarity from `multilingual-e5-base` is around 0.85 even between unrelated sentences. With the former default (0.85), unrelated memories in the same category were merged every night, keeping only the first 150 characters of one of them. Merged memories were also re-merged with each other because they share the same header text. Now merged memories are never merge candidates, the threshold is 0.95, and both phases are opt-in. Preview with `dry_run` before enabling them.
 
 ```json
 {
   "dry_run": true,
   "min_age_days": 14,
-  "similarity_threshold": 0.85
+  "merge": false,
+  "forget": false,
+  "similarity_threshold": 0.95
 }
 ```
 
 **Three phases:**
 
-1. **Merge** — group old memories in the same category with cosine similarity above the threshold, combining them into a single summary memory
+1. **Merge** — only with `merge: true`. Group old memories in the same category with cosine similarity above the threshold, combining them into a single summary memory
 2. **Decay** — lower the importance of memories with a low retention score (never below 1)
-3. **Forget** — delete memories that are importance=1, emotion=neutral, not in any episode, old enough, and rarely accessed
+3. **Forget** — only with `forget: true`. Delete memories that are importance=1, emotion=neutral, not in any episode, old enough, and rarely accessed
 
 **Protection rules (never touched):**
 - `importance >= 4`
@@ -340,7 +344,9 @@ retention = (importance/5)*0.3 + emotion_strength*0.2 + recency*0.3 + access_fre
 | Parameter | Default | Description |
 |-----------|---------|-------------|
 | `min_age_days` | 14 | Memories younger than this are not eligible |
-| `similarity_threshold` | 0.85 | Cosine similarity required for merge grouping |
+| `merge` | false | Run the merge phase (from cron: env `MEMORY_SLEEP_MERGE=true`) |
+| `forget` | false | Run the forget phase (from cron: env `MEMORY_SLEEP_FORGET=true`) |
+| `similarity_threshold` | 0.95 | Cosine similarity required for merge grouping |
 | `decay_retention_threshold` | 0.4 | Retention score below this triggers decay |
 | `forget_min_age_days` | 14 | Minimum age for forgetting |
 | `forget_max_access` | 3 | Maximum access count for forgetting |

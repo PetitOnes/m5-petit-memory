@@ -15,6 +15,10 @@ from .vector import cosine_similarity, decode_vector
 
 logger = logging.getLogger(__name__)
 
+# 統合でできた記憶の頭。決まり文句が同じなので、統合記憶どうしは必ず「似ている」と出る。
+# もう一度まとめると中身が頭の数文字しか残らないので、統合の対象にしない
+MERGED_PREFIX = "🌙 記憶整理で統合"
+
 # 「初めて」を示すキーワード — 初体験の記憶は保護
 _FIRST_TIME_KEYWORDS = ("初めて", "はじめて", "初の", "first time", "first")
 
@@ -83,7 +87,10 @@ def _is_protected(memory: Memory, config: SleepConfig) -> bool:
 
 
 class SleepEngine:
-    """三段階の記憶整理: 圧縮 → 減衰 → 忘却."""
+    """三段階の記憶整理: 圧縮 → 減衰 → 忘却.
+
+    圧縮と忘却は記憶を消すので、SleepConfig の merge / forget を立てたときだけ動く(既定は減衰だけ)。
+    """
 
     def __init__(self, store: MemoryStore, config: SleepConfig | None = None):
         self._store = store
@@ -111,7 +118,9 @@ class SleepEngine:
         protected_count = 0
 
         # Phase 1: 圧縮 (merge)
-        merged_results = await self._phase_merge(candidates, now, dry_run)
+        merged_results = (
+            await self._phase_merge(candidates, now, dry_run) if self._config.merge else []
+        )
         merged_ids: set[str] = set()
         for entry in merged_results:
             merged_ids.update(entry["group"])
@@ -147,7 +156,7 @@ class SleepEngine:
             if m.id in {d["id"] for d in decayed_results}:
                 # 今回減衰したばかりの記憶は忘却しない
                 continue
-            if self._should_forget(m, now):
+            if self._config.forget and self._should_forget(m, now):
                 forgotten_results.append({
                     "id": m.id,
                     "content": m.content[:80],
@@ -198,6 +207,8 @@ class SleepEngine:
         by_category: dict[str, list[Memory]] = {}
         for m in candidates:
             if _is_protected(m, self._config):
+                continue
+            if m.content.startswith(MERGED_PREFIX):
                 continue
             by_category.setdefault(m.category, []).append(m)
 
@@ -259,7 +270,7 @@ class SleepEngine:
                 first_content = group_mems[0].content
 
                 merged_content = (
-                    f"🌙 記憶整理で統合: {category}の記録 {len(group_mems)}件"
+                    f"{MERGED_PREFIX}: {category}の記録 {len(group_mems)}件"
                     f"（{oldest_date}〜{newest_date}）。"
                     f"主な内容: {_truncate_at_boundary(first_content, 150)}"
                 )
